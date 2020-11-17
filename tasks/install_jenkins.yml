@@ -1,0 +1,209 @@
+---
+- name: Ensure dependencies are installed.
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - curl
+    - initscripts
+    - "{{ 'libselinux-python' if ansible_python['version']['major'] < 3 else 'python3-libselinux' }}"
+    - "{{ java_version }}"
+    - https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+    - python2-jenkins
+
+- name: Add repository
+  yum_repository:
+    name: jenkins
+    description: Jenkins YUM repo
+    baseurl: http://pkg.jenkins.io/redhat-stable
+    gpgcheck: yes
+
+- name: Install Jenkins GPG Key
+  rpm_key:
+    state: present
+    key: http://pkg.jenkins.io/redhat-stable/jenkins.io.key
+
+- name: Install Jenkins
+  yum: 
+    name: "jenkins-{{ jenkins_version }}" 
+    state: present 
+    update_cache: yes
+
+- name: Set Jenkins JAVA_ARGS
+  lineinfile:
+    path: "{{ jenkins_defaults_file }}"
+    regexp: '^JENKINS_JAVA_OPTIONS='
+    line: "JENKINS_JAVA_OPTIONS=\"{{ jenkins_java_args }} {{ jenkins_java_extra_args }}\""
+  notify: restart jenkins
+
+- name: Allow logins with Jenkins SSH key
+  authorized_key: 
+    user: jenkins 
+    key: "{{ lookup('file', jenkins_ssh_public_key) }}"
+  when: "jenkins_ssh_public_key is defined and jenkins_ssh_public_key is not none"
+
+- name: Ensure Jenkins SSH directory exists
+  file: 
+    path: "/var/lib/jenkins/.ssh" 
+    owner: jenkins 
+    group: jenkins 
+    mode: 0755 
+    state: directory
+
+- name: Install Jenkins SSH key
+  copy: 
+    src: "{{ jenkins_ssh_private_key }}" 
+    dest: "/var/lib/jenkins/.ssh/id_rsa" 
+    owner: jenkins 
+    group: jenkins 
+    mode: 0600
+  when: "jenkins_ssh_private_key is defined and jenkins_ssh_private_key is not none"
+
+- name: Remove initial Jenkins password
+  file: 
+    name: /var/lib/jenkins/secrets/initialAdminPassword 
+    state: absent
+
+- name: Create Jenkins admin password hash
+  shell: echo -n "{{ jenkins_admin_password }}{ansible_jenkins}" | sha256sum - | awk '{ print $1; }'
+  register: jenkins_password_hash
+  changed_when: False
+
+- name: Create admin user directory
+  file: 
+    path: "/var/lib/jenkins/users/admin" 
+    owner: jenkins 
+    group: jenkins 
+    mode: 0755 
+    state: directory 
+    recurse: yes
+
+- name: Create admin
+  template: 
+    src: admin-config.xml.j2 
+    dest: "/var/lib/jenkins/users/admin/config.xml" 
+    force: no
+  notify: restart jenkins
+
+- name: Create config
+  template: 
+    src: config.xml.j2 
+    dest: "/var/lib/jenkins/config.xml"
+
+- name: Create scriptApproval
+  template: 
+    src: scriptApproval.xml.j2 
+    dest: "/var/lib/jenkins/scriptApproval.xml"
+  notify: restart jenkins
+  
+- name: Create Jenkins location configuration
+  template:
+    src: jenkins.model.JenkinsLocationConfiguration.xml.j2
+    dest: "/var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml"
+  when: jenkins_url is defined and jenkins_url != ""
+  notify: restart jenkins
+
+- name: Force restart jenkins if notified
+  meta: flush_handlers
+
+#- name: Create CLI config (disable CLI)
+#  copy: 
+#    src: jenkins.CLI.xml 
+#    dest: "/var/lib/jenkins/jenkins.CLI.xml"
+
+- name: Create queue item authenticator configuration
+  copy:
+    src: jenkins.security.QueueItemAuthenticatorConfiguration.xml
+    dest: "/var/lib/jenkins/jenkins.security.QueueItemAuthenticatorConfiguration.xml"
+
+- name: Create job-dsl security configuration
+  copy:
+    src: javaposse.jobdsl.plugin.GlobalJobDslSecurityConfiguration.xml
+    dest: "/var/lib/jenkins/javaposse.jobdsl.plugin.GlobalJobDslSecurityConfiguration.xml"
+
+- name: Create credentials configuration
+  template:
+    src: credentials.xml.j2
+    dest: "/var/lib/jenkins/credentials.xml"
+
+- name: Create download settings configuration
+  copy:
+    src: jenkins.model.DownloadSettings.xml
+    dest: "/var/lib/jenkins/jenkins.model.DownloadSettings.xml"
+
+- name: Create /var/lib/jenkins/secrets
+  file: 
+    path: "/var/lib/jenkins/secrets" 
+    owner: jenkins 
+    group: jenkins 
+    mode: 0700 
+    state: directory 
+    recurse: yes
+
+- name: Wait for Jenkins to start up before proceeding.
+  uri:
+    url: "http://127.0.0.1:8080/cli/"
+    method: GET
+    return_content: "yes"
+    timeout: 5
+    body_format: raw
+    follow_redirects: "no"
+    status_code: 200,403
+  register: result
+  until: (result.status == 403 or result.status == 200) and (result.content.find("Please wait while") == -1)
+  retries: 30 
+  delay: 5
+  changed_when: false
+  check_mode: false
+
+- name: Create API Token
+  jenkins_script:
+    script: "{{ lookup('file', 'files/create_api_token.groovy') }}"
+    user: admin
+    password: "{{ jenkins_admin_password }}"
+  register: api_result
+
+- set_fact:
+    jenkins_token: "{{ api_result.output | replace('Result:' ,'') | trim }}"
+
+- name: Get installed plugins
+  uri:
+    user: admin
+    password: "{{ jenkins_token }}"
+    force_basic_auth: yes
+    url: "http://127.0.0.1:8080/pluginManager/api/json?tree=plugins[shortName]"
+    return_content: yes
+  register: jenkins_installed_plugins
+
+- name: Install plugins
+  jenkins_plugin:
+    name: "{{ item }}"
+    url_username: admin
+    url_password: "{{ jenkins_admin_password }}"
+    url: http://localhost:8080
+  with_items: "{{ jenkins_plugins }}"
+  when: item not in jenkins_installed_plugins.json.plugins|map(attribute='shortName')|list
+  register: installed_plugins
+
+- name: Restart Jenkins to activate new plugins
+  service: 
+    name: jenkins 
+    state: restarted
+  when: installed_plugins.changed
+
+- name: Wait for Jenkins to start up before proceeding.
+  uri:
+    url: "http://127.0.0.1:8080/cli/"
+    method: GET
+    return_content: "yes"
+    timeout: 5
+    body_format: raw
+    follow_redirects: "no"
+    status_code: 200,403
+  register: result
+  until: (result.status == 403 or result.status == 200) and (result.content.find("Please wait while") == -1)
+  retries: 30
+  delay: 5
+  changed_when: false
+  check_mode: false
+

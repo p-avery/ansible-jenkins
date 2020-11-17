@@ -1,0 +1,6 @@
+---
+- include_tasks: install_jenkins.yml
+  tags: install
+
+- include_tasks: seed-job.yml
+  tags: jobs

@@ -1,0 +1,32 @@
+---
+java_version: java-1.8.0-openjdk-devel
+jenkins_java_args: -Djava.awt.headless=true -Djenkins.install.runSetupWizard=false
+jenkins_java_extra_args: ""
+jenkins_defaults_file: /etc/sysconfig/jenkins
+jenkins_plugins:
+- git
+- job-dsl
+- workflow-job
+- workflow-cps
+- ansible-tower
+- ansicolor
+- plain-credentials
+jenkins_seed_name: pipeline-seed
+jenkins_seed_template: seed-config.xml.j2
+jenkins_job_template: jobs.groovy.j2
+jenkins_version: 2.222.3
+jenkins_approved_signatures:
+- method hudson.plugins.git.GitSCM getBranches
+- method hudson.plugins.git.GitSCM getUserRemoteConfigs
+- method hudson.plugins.git.GitSCMBackwardCompatibility getExtensions
+jenkins_acl_approved_signatures: []
+jenkins_slave_agent_port: 0
+jenkins_admin_address: nobody@example.com
+#jenkins_url:
+jenkins_admin_password: R3dH4t321!
+jenkins_git_user: student1
+jenkins_git_host: https://gitlab.cicd.rhdemo.io/
+jenkins_git_path: git
+jenkins_git_repositories:
+  - workshop_project
+update_seed_job: False
