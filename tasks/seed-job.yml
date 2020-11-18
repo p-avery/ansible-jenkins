@@ -39,3 +39,28 @@
   until: jenkins_seed['status']|default(0) == 200
   retries: 10
   delay: 5
+  
+- name: Run build job
+  uri:
+    user: admin
+    password: "{{ jenkins_token }}"
+    force_basic_auth: yes
+    url: "http://127.0.0.1:8080/job/{{ item }}/build"
+    method: POST
+    status_code: 201
+  register: jenkins_buid_job_started
+  with_items: {{ jenkins_git_repositories }}
+
+- name: Wait for seed job
+  uri:
+    user: admin
+    password: "{{ jenkins_admin_password }}"
+    force_basic_auth: yes
+    url: "http://127.0.0.1:8080/job/{{ item }}/lastBuild/buildNumber?token={{ jenkins_token }}"
+    method: GET
+    status_code: 200
+  register: jenkins_seed
+  until: jenkins_seed['status']|default(0) == 200
+  retries: 10
+  delay: 5
+  with_items: {{ jenkins_git_repositories }}
