@@ -24,9 +24,9 @@ jenkins_slave_agent_port: 0
 jenkins_admin_address: nobody@example.com
 #jenkins_url:
 jenkins_admin_password: R3dH4t321!
-jenkins_git_user: student1
-jenkins_git_host: https://gitlab.cicd.redhatday.com
+jenkins_git_user: p-avery
+jenkins_git_host: https://github.com
 jenkins_git_path: git
 jenkins_git_repositories:
-  - workshop_project
+  - ansible-apache
 update_seed_job: False
