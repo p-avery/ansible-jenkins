@@ -9,9 +9,8 @@ pipelineJob('{{ repository }}') {
         git {
           remote {
             url('{{ jenkins_git_host }}/{{ jenkins_git_user }}/{{ repository }}.git')
-            credentials('{{ jenkins_git_user }}')
           }
-          branch('master')
+          branch('main')
         }
       }
       scriptPath('Jenkinsfile')
