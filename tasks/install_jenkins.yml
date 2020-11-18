@@ -8,8 +8,8 @@
     - initscripts
     - "{{ 'libselinux-python' if ansible_python['version']['major'] < 3 else 'python3-libselinux' }}"
     - "{{ java_version }}"
-    - https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-    - python2-jenkins
+    - "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
+    - "{{ 'python2-jenkins' if ansible_python['version']['major'] < 3 else 'python3-jenkins' }}"
 
 - name: Add repository
   yum_repository:

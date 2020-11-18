@@ -8,7 +8,7 @@ pipelineJob('{{ repository }}') {
       scm {
         git {
           remote {
-            url('{{ jenkins_git_user }}@{{ jenkins_git_host }}:{{ jenkins_git_path }}/{{ repository }}.git')
+            url('{{ jenkins_git_host }}/{{ jenkins_git_user }}/{{ repository }}.git')
             credentials('{{ jenkins_git_user }}')
           }
           branch('master')

@@ -49,9 +49,9 @@
     method: POST
     status_code: 201
   register: jenkins_buid_job_started
-  with_items: {{ jenkins_git_repositories }}
-
-- name: Wait for seed job
+  with_items: "{{ jenkins_git_repositories }}"
+  
+- name: Wait for build job
   uri:
     user: admin
     password: "{{ jenkins_admin_password }}"
@@ -63,4 +63,4 @@
   until: jenkins_seed['status']|default(0) == 200
   retries: 10
   delay: 5
-  with_items: {{ jenkins_git_repositories }}
+  with_items: "{{ jenkins_git_repositories }}"
